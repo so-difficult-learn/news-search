@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>뉴스쏙쏙 - 초등학생 맞춤형 AI 기후·시사 학습</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Noto Sans KR', sans-serif; background-color: #f8fafc; }
+    .loader {
+      border: 4px solid #e2e8f0;
+      border-top: 4px solid #2563eb;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body class="text-slate-800 antialiased">
+
+  <!-- 상단 헤더 -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-20">
+    <div class="max-w-6xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 bg-blue-600 text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-sm">N</div>
+        <div>
+          <h1 class="text-lg font-bold text-slate-900 leading-tight">뉴스쏙쏙 <span class="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full ml-1">기후·환경 탐구</span></h1>
+          <p class="text-xs text-slate-500">쉬운 기사 요약부터 원문 출처 팩트체크까지</p>
+        </div>
+      </div>
+
+      <!-- 학년 난이도 선택 (기본값: 초등 눈높이 활성화) -->
+      <div class="flex items-center bg-slate-100 p-1 rounded-xl text-sm">
+        <button type="button" onclick="setGrade('elementary')" id="btn-elementary" class="grade-btn px-3 py-1.5 rounded-lg font-medium bg-white text-blue-600 shadow-sm transition">초등 눈높이</button>
+        <button type="button" onclick="setGrade('middle')" id="btn-middle" class="grade-btn px-3 py-1.5 rounded-lg font-medium transition">중등 눈높이</button>
+        <button type="button" onclick="setGrade('high')" id="btn-high" class="grade-btn px-3 py-1.5 rounded-lg font-medium transition">고등 눈높이</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-8">
+    <!-- 검색 영역 (Apps Script 화면 사라짐 방지를 위해 form 대신 div 사용) -->
+    <section class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-8">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <input 
+          type="text" 
+          id="searchInput" 
+          onkeydown="if(event.key === 'Enter'){ event.preventDefault(); handleSearch(); }"
+          placeholder="궁금한 기후위기 키워드를 입력하세요 (예: 기후위기 원인, 에너지와 기후)" 
+          class="flex-1 px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+        >
+        <button type="button" onclick="handleSearch()" id="searchBtn" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-xl transition flex items-center justify-center gap-2 shrink-0">
+          <span>뉴스 6개 검색 및 요약</span>
+        </button>
+      </div>
+
+      <!-- 기후위기 원인·결과 추천 키워드 -->
+      <div class="mt-3.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+        <span class="font-semibold text-slate-600">🌱 기후위기 탐구 키워드:</span>
+        <button type="button" onclick="quickSearch('기후위기 원인')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full text-emerald-800 font-medium transition">#기후위기 원인</button>
+        <button type="button" onclick="quickSearch('에너지와 기후')" class="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-full text-emerald-800 font-medium transition">#에너지와 기후</button>
+        <button type="button" onclick="quickSearch('온실가스 지구온난화')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-700 transition">#온실가스 지구온난화</button>
+        <button type="button" onclick="quickSearch('이상기후 폭염 홍수')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-700 transition">#이상기후 폭염 홍수</button>
+        <button type="button" onclick="quickSearch('기후위기 생태계 변화')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 rounded-full text-slate-700 transition">#기후위기 생태계 변화</button>
+      </div>
+    </section>
+
+    <!-- 로딩 상태 -->
+    <div id="loadingBox" class="hidden flex-col items-center justify-center py-16 text-center">
+      <div class="loader mb-4"></div>
+      <p class="text-slate-700 font-semibold text-lg">실시간 뉴스 6개를 찾아 초등학생 눈높이로 정리하고 있어요...</p>
+      <p class="text-slate-500 text-sm mt-1">원문 출처 확인, 쉬운 요약, 퀴즈 생성까지 약 8~12초 정도 걸립니다.</p>
+    </div>
+
+    <!-- 에러 메시지 -->
+    <div id="errorBox" class="hidden bg-red-50 border border-red-200 text-red-700 p-4 rounded-xl mb-6 text-sm"></div>
+
+    <!-- 결과 목록 영역 -->
+    <div id="resultsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+
+    <!-- 기사 상세 학습 및 팩트체크 뷰 -->
+    <div id="detailView" class="hidden max-w-4xl mx-auto bg-white rounded-2xl border border-slate-200 shadow-lg overflow-hidden">
+      <div class="bg-slate-50 border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+        <button type="button" onclick="closeDetail()" class="text-sm font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1">
+          ← 기사 6개 목록으로 돌아가기
+        </button>
+        <span id="detailBadge" class="text-xs font-bold px-3 py-1 rounded-full bg-slate-200 text-slate-700">팩트체크 대기중</span>
+      </div>
+
+      <div class="p-6 sm:p-8 space-y-8">
+        <!-- 제목 및 메타 -->
+        <div>
+          <div class="flex items-center gap-2 text-xs font-semibold text-blue-600 mb-2">
+            <span id="detailCategory" class="bg-blue-50 px-2.5 py-1 rounded-md">환경</span>
+            <span id="detailDate" class="text-slate-400">2026년 11월 14일</span>
+          </div>
+          <h2 id="detailTitle" class="text-2xl font-bold text-slate-900 leading-snug"></h2>
+        </div>
+
+        <!-- 3줄 핵심 요약 -->
+        <div class="bg-amber-50/70 border border-amber-200 rounded-xl p-5">
+          <h3 class="text-sm font-bold text-amber-900 mb-2.5">📌 한눈에 보는 3줄 핵심</h3>
+          <ul id="detailKeyPoints" class="space-y-1.5 text-sm text-amber-950 list-disc list-inside"></ul>
+        </div>
+
+        <!-- 쉬운 본문 -->
+        <div>
+          <h3 class="text-base font-bold text-slate-900 mb-3">📖 학생 맞춤형 쉬운 기사 정리</h3>
+          <div id="detailBody" class="text-slate-700 leading-relaxed space-y-4 text-base bg-slate-50 p-5 rounded-xl border border-slate-100"></div>
+        </div>
+
+        <!-- 어려운 단어 사전 -->
+        <div>
+          <h3 class="text-base font-bold text-slate-900 mb-3">📚 기사 속 핵심 단어 풀이</h3>
+          <div id="detailVocab" class="grid grid-cols-1 sm:grid-cols-2 gap-3"></div>
+        </div>
+
+        <!-- 원문 출처 확인 및 학생 주도 팩트체크 -->
+        <div class="border-2 border-indigo-100 bg-indigo-50/40 rounded-2xl p-6 space-y-5">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-indigo-100 pb-4">
+            <div>
+              <span class="text-xs font-bold text-indigo-600 uppercase tracking-wider">Media Literacy & Fact-Check</span>
+              <h3 class="text-lg font-bold text-slate-900 mt-0.5">🔍 원문 출처 직접 확인 및 팩트체크</h3>
+              <p class="text-xs text-slate-600 mt-1">실제 언론사 기사로 이동해 요약된 내용이 사실과 일치하는지 직접 검증해 보세요.</p>
+            </div>
+            <a id="detailSourceLink" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm transition shrink-0">
+              <span>원문 기사 직접 열기 ↗</span>
+            </a>
+          </div>
+
+          <div class="bg-white p-4 rounded-xl border border-indigo-100 text-sm space-y-1">
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-slate-500 w-20 shrink-0">언론사/출처:</span>
+              <span id="detailSourceName" class="font-bold text-slate-800"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-slate-500 w-20 shrink-0">원문 제목:</span>
+              <span id="detailOriginalTitle" class="text-slate-700"></span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="font-semibold text-slate-500 w-20 shrink-0">원문 주소:</span>
+              <span id="detailUrlText" class="text-xs text-indigo-600 truncate"></span>
+            </div>
+          </div>
+
+          <!-- 학생 자가 검증 체크리스트 -->
+          <div class="space-y-2.5">
+            <p class="text-sm font-bold text-slate-800">✅ 원문 페이지에 들어가 아래 3가지를 직접 확인했나요?</p>
+            <label class="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" id="chk1" class="mt-1 rounded text-indigo-600">
+              <span>1. 연결된 웹사이트가 실제 신뢰할 수 있는 언론사(공식 도메인)가 맞습니다.</span>
+            </label>
+            <label class="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" id="chk2" class="mt-1 rounded text-indigo-600">
+              <span>2. 쉬운 요약문의 핵심 내용(숫자, 인물, 사건)이 원문 기사와 일치합니다.</span>
+            </label>
+            <label class="flex items-start gap-2.5 text-sm text-slate-700 cursor-pointer">
+              <input type="checkbox" id="chk3" class="mt-1 rounded text-indigo-600">
+              <span>3. 기사의 작성 날짜와 기자 이름이 명확하게 표시되어 있습니다.</span>
+            </label>
+          </div>
+
+          <div class="pt-2 flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
+            <input type="text" id="factNote" placeholder="직접 확인한 소감이나 메모를 적어보세요 (예: 원문과 날짜, 핵심 내용이 모두 정확함)" class="flex-1 px-3.5 py-2 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <div class="flex gap-2">
+              <button type="button" onclick="saveFactCheck('verified')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition">✅ 정확한 기사예요</button>
+              <button type="button" onclick="saveFactCheck('caution')" class="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold rounded-xl transition">⚠️ 확인 필요/오류</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 문해력 확인 퀴즈 -->
+        <div class="bg-slate-50 border border-slate-200 rounded-2xl p-6">
+          <h3 class="text-base font-bold text-slate-900 mb-2">🧠 문해력 확인 퀴즈</h3>
+          <p id="quizQuestion" class="text-sm font-medium text-slate-800 mb-4"></p>
+          <div id="quizOptions" class="space-y-2"></div>
+          <div id="quizFeedback" class="hidden mt-4 p-3.5 rounded-xl text-sm"></div>
+        </div>
+
+        <!-- 생각 열기 토론 주제 -->
+        <div class="bg-blue-50/60 border border-blue-100 rounded-2xl p-5">
+          <h3 class="text-sm font-bold text-blue-900 mb-1">💬 함께 생각해 볼 토론 질문</h3>
+          <p id="detailDiscussion" class="text-sm text-blue-950"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let currentGrade = 'elementary';
+    let articlesData = [];
+    let currentArticleIndex = null;
+    let factCheckStatus = {};
+
+    function setGrade(grade) {
+      currentGrade = grade;
+      document.querySelectorAll('.grade-btn').forEach(btn => {
+        btn.classList.remove('bg-white', 'text-blue-600', 'shadow-sm');
+      });
+      document.getElementById('btn-' + grade).classList.add('bg-white', 'text-blue-600', 'shadow-sm');
+    }
+
+    function quickSearch(keyword) {
+      document.getElementById('searchInput').value = keyword;
+      handleSearch();
+    }
+
+    function handleSearch() {
+      const inputEl = document.getElementById('searchInput');
+      const keyword = inputEl.value.trim();
+      if (!keyword) {
+        alert('검색할 키워드를 입력해 주세요!');
+        inputEl.focus();
+        return;
+      }
+
+      document.getElementById('detailView').classList.add('hidden');
+      document.getElementById('resultsContainer').classList.remove('hidden');
+      document.getElementById('resultsContainer').innerHTML = '';
+      document.getElementById('errorBox').classList.add('hidden');
+      document.getElementById('loadingBox').classList.remove('hidden');
+      document.getElementById('loadingBox').classList.add('flex');
+      document.getElementById('searchBtn').disabled = true;
+
+      google.script.run
+        .withSuccessHandler(function(data) {
+          document.getElementById('loadingBox').classList.add('hidden');
+          document.getElementById('loadingBox').classList.remove('flex');
+          document.getElementById('searchBtn').disabled = false;
+          articlesData = data || [];
+          renderArticleCards();
+        })
+        .withFailureHandler(function(err) {
+          document.getElementById('loadingBox').classList.add('hidden');
+          document.getElementById('loadingBox').classList.remove('flex');
+          document.getElementById('searchBtn').disabled = false;
+          const errBox = document.getElementById('errorBox');
+          errBox.textContent = "오류가 발생했습니다: " + err.message;
+          errBox.classList.remove('hidden');
+        })
+        .searchAndSummarizeNews(keyword, currentGrade);
+    }
+
+    function renderArticleCards() {
+      const container = document.getElementById('resultsContainer');
+      container.innerHTML = '';
+
+      if (articlesData.length === 0) {
+        container.innerHTML = '<p class="col-span-full text-center text-slate-500 py-10">검색 결과가 없습니다. 다른 키워드로 검색해 보세요.</p>';
+        return;
+      }
+
+      articlesData.forEach((item, index) => {
+        const checkInfo = factCheckStatus[item.id];
+        let badgeHtml = '<span class="text-xs font-medium px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">팩트체크 전</span>';
+        if (checkInfo?.status === 'verified') {
+          badgeHtml = '<span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">✅ 팩트체크 완료</span>';
+        } else if (checkInfo?.status === 'caution') {
+          badgeHtml = '<span class="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-700">⚠️ 확인 필요</span>';
+        }
+
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl p-6 border border-slate-200 shadow-sm hover:shadow-md transition flex flex-col justify-between';
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <span class="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-md">${item.category || '환경'}</span>
+              ${badgeHtml}
+            </div>
+            <h3 class="text-lg font-bold text-slate-900 mb-2 leading-snug">${item.studentTitle}</h3>
+            <p class="text-sm text-slate-600 line-clamp-3 mb-4">${item.keyPoints ? item.keyPoints[0] : ''}</p>
+          </div>
+          <div class="pt-4 border-t border-slate-100 flex items-center justify-between gap-2">
+            <span class="text-xs text-slate-500 truncate max-w-[140px]">출처: ${item.sourceName}</span>
+            <button type="button" onclick="openDetail(${index})" class="text-sm font-semibold text-blue-600 hover:text-blue-800 shrink-0">
+              학습 및 출처확인 →
+            </button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function openDetail(index) {
+      currentArticleIndex = index;
+      const item = articlesData[index];
+      document.getElementById('resultsContainer').classList.add('hidden');
+      const detail = document.getElementById('detailView');
+      detail.classList.remove('hidden');
+
+      document.getElementById('detailCategory').textContent = item.category || '환경';
+      document.getElementById('detailDate').textContent = item.pubDate || '';
+      document.getElementById('detailTitle').textContent = item.studentTitle;
+
+      const kpList = document.getElementById('detailKeyPoints');
+      kpList.innerHTML = (item.keyPoints || []).map(pt => `<li>${pt}</li>`).join('');
+
+      const bodyDiv = document.getElementById('detailBody');
+      bodyDiv.innerHTML = (item.easyBody || '').split('\n\n').map(p => `<p>${p}</p>`).join('');
+
+      const vocabDiv = document.getElementById('detailVocab');
+      vocabDiv.innerHTML = (item.vocabulary || []).map(v => `
+        <div class="bg-white border border-slate-200 rounded-xl p-3.5">
+          <span class="font-bold text-blue-700 text-sm">${v.word}</span>
+          <p class="text-xs text-slate-600 mt-1">${v.meaning}</p>
+        </div>
+      `).join('');
+
+      document.getElementById('detailSourceName').textContent = item.sourceName;
+      document.getElementById('detailOriginalTitle').textContent = item.originalTitle;
+      document.getElementById('detailUrlText').textContent = item.sourceUrl;
+      document.getElementById('detailSourceLink').href = item.sourceUrl;
+
+      const saved = factCheckStatus[item.id] || {};
+      document.getElementById('chk1').checked = !!saved.status;
+      document.getElementById('chk2').checked = !!saved.status;
+      document.getElementById('chk3').checked = !!saved.status;
+      document.getElementById('factNote').value = saved.note || '';
+      updateDetailBadge(saved.status);
+
+      const quiz = item.quiz || {};
+      document.getElementById('quizQuestion').textContent = quiz.question || '';
+      const optDiv = document.getElementById('quizOptions');
+      const fbDiv = document.getElementById('quizFeedback');
+      fbDiv.classList.add('hidden');
+      optDiv.innerHTML = (quiz.options || []).map((opt, idx) => `
+        <button type="button" onclick="checkQuiz(${idx})" class="w-full text-left px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-blue-50 text-sm transition">
+          ${idx + 1}. ${opt}
+        </button>
+      `).join('');
+
+      document.getElementById('detailDiscussion').textContent = item.discussionTopic || '';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function checkQuiz(selectedIdx) {
+      const quiz = articlesData[currentArticleIndex].quiz;
+      const fbDiv = document.getElementById('quizFeedback');
+      fbDiv.classList.remove('hidden', 'bg-emerald-50', 'text-emerald-800', 'bg-red-50', 'text-red-800');
+      if (selectedIdx === quiz.answerIndex) {
+        fbDiv.classList.add('bg-emerald-50', 'text-emerald-800');
+        fbDiv.innerHTML = `<strong>🎉 정답입니다!</strong> ${quiz.explanation}`;
+      } else {
+        fbDiv.classList.add('bg-red-50', 'text-red-800');
+        fbDiv.innerHTML = `<strong>💡 다시 생각해 볼까요?</strong> ${quiz.explanation}`;
+      }
+    }
+
+    function saveFactCheck(status) {
+      const item = articlesData[currentArticleIndex];
+      const note = document.getElementById('factNote').value.trim();
+      factCheckStatus[item.id] = { status, note };
+      updateDetailBadge(status);
+      alert(status === 'verified' ? '원문 출처 및 팩트체크 인증이 저장되었습니다!' : '확인 필요 표시가 기록되었습니다.');
+    }
+
+    function updateDetailBadge(status) {
+      const badge = document.getElementById('detailBadge');
+      badge.className = 'text-xs font-bold px-3 py-1 rounded-full';
+      if (status === 'verified') {
+        badge.classList.add('bg-emerald-100', 'text-emerald-700');
+        badge.textContent = '✅ 팩트체크 완료';
+      } else if (status === 'caution') {
+        badge.classList.add('bg-amber-100', 'text-amber-700');
+        badge.textContent = '⚠️ 확인 필요/오류';
+      } else {
+        badge.classList.add('bg-slate-200', 'text-slate-700');
+        badge.textContent = '팩트체크 대기중';
+      }
+    }
+
+    function closeDetail() {
+      document.getElementById('detailView').classList.add('hidden');
+      document.getElementById('resultsContainer').classList.remove('hidden');
+      renderArticleCards();
+    }
+  </script>
+</body>
+</html>
